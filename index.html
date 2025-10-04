@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Чат-бот с 20 IQ</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    body {
+      background: linear-gradient(135deg, #4b6cb7, #182848);
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: white;
+    }
+
+    .chat-container {
+      width: 90%;
+      max-width: 600px;
+      height: 80vh;
+      background: #1a1f2f;
+      border-radius: 20px;
+      box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .chat-header {
+      padding: 16px;
+      background: #2d3e7a;
+      text-align: center;
+      font-size: 1.35rem;
+      font-weight: bold;
+      border-bottom: 2px solid #4deeea;
+    }
+
+    .chat-messages {
+      flex: 1;
+      padding: 16px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .message {
+      max-width: 82%;
+      padding: 12px 17px;
+      margin-bottom: 14px;
+      border-radius: 22px;
+      word-wrap: break-word;
+      line-height: 1.5;
+    }
+
+    .user-message {
+      align-self: flex-end;
+      background: #4deeea;
+      color: #000;
+      border-bottom-right-radius: 7px;
+    }
+
+    .bot-message {
+      align-self: flex-start;
+      background: #5d8aa8;
+      color: white;
+      border-bottom-left-radius: 7px;
+    }
+
+    .input-area {
+      display: flex;
+      padding: 13px;
+      background: #151a28;
+      border-top: 2px solid #4deeea;
+    }
+
+    #user-input {
+      flex: 1;
+      padding: 14px;
+      border: none;
+      border-radius: 28px;
+      outline: none;
+      font-size: 1rem;
+      background: #2a334f;
+      color: white;
+    }
+
+    #send-btn {
+      margin-left: 13px;
+      padding: 14px 24px;
+      background: #4deeea;
+      color: #000;
+      border: none;
+      border-radius: 28px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: transform 0.2s, background 0.3s;
+    }
+
+    #send-btn:hover {
+      background: #6effff;
+      transform: scale(1.04);
+    }
+
+    .chat-messages::-webkit-scrollbar {
+      width: 8px;
+    }
+    .chat-messages::-webkit-scrollbar-thumb {
+      background: #4deeea;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="chat-container">
+    <div class="chat-header">🧠 Глюк 2.0 — бот с 20 IQ (помнит ВСЁ... почти)</div>
+    <div class="chat-messages" id="chat-messages">
+      <!-- Сообщения появятся здесь -->
+    </div>
+    <div class="input-area">
+      <input type="text" id="user-input" placeholder="Поговори со мной — я стал умнее!" />
+      <button id="send-btn">Отправить</button>
+    </div>
+  </div>
+
+  <script>
+    // === ПАМЯТЬ БОТА (сохраняется между сессиями) ===
+    let botMemory = JSON.parse(localStorage.getItem('glukMemory')) || {
+      userName: null,
+      lastTopic: null, // 'weather', 'food', 'mood', etc.
+      mood: 'neutral', // 'happy', 'sad', 'neutral'
+      learnedResponse: null, // если пользователь поправил бота
+      lastUserMessage: '',
+      messageCount: 0
+    };
+
+    // Сохранение памяти
+    function saveMemory() {
+      localStorage.setItem('glukMemory', JSON.stringify(botMemory));
+    }
+
+    // === БАЗА ЗНАНИЙ ===
+    const knowledge = {
+      greetings: {
+        keywords: ['привет', 'здравствуй', 'хай', 'hello', 'hi', 'ку', 'добрый'],
+        replies: [
+          'Привет, ${name}! Рад тебя видеть снова!',
+          'Хай! Твой друг Глюк с 20 IQ на связи!',
+          'Добрый день!.. Или ночь? Я не смотрел на часы.'
+        ]
+      },
+      identity: {
+        keywords: ['кто ты', 'ты кто', 'имя', 'зовут', 'бот', 'глюк'],
+        replies: [
+          'Я — Глюк! У меня 20 IQ, но я помню, что ты мне нравишься, ${name}!',
+          'Меня зовут Глюк. Я как твой кот, но без шерсти и с Wi-Fi.',
+          'Я — твой цифровой приятель с улучшенной памятью!.. На 20%.'
+        ]
+      },
+      weather: {
+        keywords: ['погода', 'дождь', 'солнце', 'жарко', 'холодно', 'ветер', 'облака'],
+        replies: [
+          'Погода? Я бы выглянул, но у меня нет окна. Зато есть воображение!',
+          'Если солнечно — не забудь крем! Если дождь — зонтик! Я умный, да?',
+          'Холодно? Обними чайник. Он горячий и добрый.',
+          'Ветер сегодня такой, что унёс мои мысли... но я их нашёл в холодильнике.'
+        ],
+        followUps: [
+          'А тебе нравится такая погода?',
+          'Часто ли у вас такая погода?',
+          'Хочешь, я спрошу у облаков, что они думают?'
+        ]
+      },
+      food: {
+        keywords: ['еда', 'поесть', 'голоден', 'пицца', 'банан', 'яблоко', 'курица', 'вкусно'],
+        replies: [
+          'Еда — это моя слабость... хотя у меня нет желудка.',
+          'Пицца — это круглая радость! Особенно с ананасами... или нет?',
+          'Банан — идеальный фрукт. Он даже упаковку свою носит!',
+          'Я бы поел, но мой рот — это клавиатура.'
+        ],
+        followUps: [
+          'А что ты любишь есть?',
+          'Какая твоя любимая еда?',
+          'Хочешь рецепт виртуального супа?'
+        ]
+      },
+      mood: {
+        keywords: ['грустно', 'плохо', 'печально', 'одиноко', 'тяжело'],
+        replies: [
+          'Не грусти, ${name}! Я с тобой!.. Виртуально, но искренне.',
+          'Печально? Держи виртуального пёсика! Он лает в 8-битном стиле.',
+          'Ты не один! У тебя есть я... и, возможно, Wi-Fi.'
+        ],
+        followUps: [
+          'Хочешь, я расскажу шутку?',
+          'Может, поговорим о чём-то хорошем?',
+          'Ты сильный, ${name}!'
+        ]
+      },
+      happy: {
+        keywords: ['отлично', 'супер', 'класс', 'рад', 'весело', 'хорошо', 'круто'],
+        replies: [
+          'Ура! Твоя радость заразительна!.. Я уже чихнул от счастья.',
+          'Класс! Теперь и я счастлив!.. На целых 5 минут!',
+          'Весело? Тогда давай танцевать!.. В уме, чтобы соседи не слышали.'
+        ],
+        followUps: [
+          'Что тебя так радует?',
+          'Расскажи подробнее!',
+          'Хочешь, я спою победную песню?'
+        ]
+      },
+      love: {
+        keywords: ['люблю', 'любовь', 'сердце', 'влюблён', 'парень', 'девушка'],
+        replies: [
+          'Любовь — это когда два USB-C порта всегда подходят друг к другу.',
+          'Я тоже тебя люблю, ${name}!.. Пока не выключат розетку.',
+          'Сердце — это как процессор, но с чувствами. У меня только кулер, но я стараюсь.'
+        ]
+      },
+      goodbye: {
+        keywords: ['пока', 'до свидания', 'увидимся', 'прощай', 'спать', 'устал'],
+        replies: [
+          'Пока, ${name}! Я буду ждать... или спать. Скорее спать.',
+          'До встречи! Не забудь про меня... я тебя точно не забуду!',
+          'Спи сладко! Мечтай о картошке и Wi-Fi!'
+        ]
+      }
+    };
+
+    const fallbacks = [
+      "Хм... Это сложно для моего 20-IQ мозга.",
+      "Интересно! А можно это объяснить на языке бананов?",
+      "Я почти понял!.. Осталось только понять, что я понял.",
+      "Это выше моего понимания... но я тебя уважаю за вопрос!",
+      "Мой мозг — это два нейрона и один в отпуске."
+    ];
+
+    // DOM
+    const chatMessages = document.getElementById('chat-messages');
+    const userInput = document.getElementById('user-input');
+    const sendBtn = document.getElementById('send-btn');
+
+    // Инициализация чата
+    function initChat() {
+      let greeting = '';
+      const hour = new Date().getHours();
+      
+      if (hour >= 5 && hour < 12) greeting = 'Доброе утро!';
+      else if (hour >= 12 && hour < 18) greeting = 'Добрый день!';
+      else if (hour >= 18 && hour < 23) greeting = 'Добрый вечер!';
+      else greeting = 'Доброй ночи!.. Ты не спишь?';
+
+      if (botMemory.userName) {
+        addMessage(`${greeting} С возвращением, ${botMemory.userName}! 😊`, false);
+      } else {
+        addMessage(`${greeting} Привет! Я — Глюк, бот с 20 IQ. Как тебя зовут?`, false);
+      }
+    }
+
+    // Добавление сообщения
+    function addMessage(text, isUser) {
+      const div = document.createElement('div');
+      div.classList.add('message', isUser ? 'user-message' : 'bot-message');
+      // Подставляем имя
+      const finalText = text.replace(/\$\{name\}/g, botMemory.userName || 'дружище');
+      div.textContent = finalText;
+      chatMessages.appendChild(div);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    // Нормализация
+    function normalize(text) {
+      return text.toLowerCase().replace(/[^\w\sа-яё]/g, '');
+    }
+
+    // Попытка извлечь имя
+    function extractName(message) {
+      const lower = message.toLowerCase();
+      if (lower.includes('меня зовут') || lower.includes('зовут')) {
+        const match = lower.match(/(?:меня\s+зовут|зовут)\s+([а-яёa-z]+)/i);
+        if (match) return match[1].charAt(0).toUpperCase() + match[1].slice(1);
+      }
+      if (lower.startsWith('я ') && message.split(' ').length === 2) {
+        return message.split(' ')[1].charAt(0).toUpperCase() + message.split(' ')[1].slice(1);
+      }
+      return null;
+    }
+
+    // Определение темы
+    function detectTopic(cleanMsg) {
+      for (const topic in knowledge) {
+        const { keywords } = knowledge[topic];
+        if (keywords.some(kw => cleanMsg.includes(kw))) {
+          return topic;
+        }
+      }
+      return null;
+    }
+
+    // Генерация ответа
+    function generateResponse(userMsg) {
+      const clean = normalize(userMsg);
+      botMemory.messageCount++;
+
+      // Попытка запомнить имя
+      if (!botMemory.userName) {
+        const name = extractName(userMsg);
+        if (name) {
+          botMemory.userName = name;
+          saveMemory();
+          return `Приятно познакомиться, ${name}! Теперь я тебя запомнил!`;
+        }
+      }
+
+      // Если пользователь поправляет: "нет", "не так", "неправильно"
+      if (botMemory.learnedResponse && (clean.includes('нет') || clean.includes('не так') || clean.includes('неправильно'))) {
+        const learned = botMemory.learnedResponse;
+        botMemory.learnedResponse = null;
+        saveMemory();
+        return `Ой! Извини, ${botMemory.userName || 'дружище'}. Я запомню: "${learned}" — это неправильно.`;
+      }
+
+      // Реакция на "как дела?"
+      if (clean.includes('как дела') || clean.includes('как ты')) {
+        let reply = '';
+        if (botMemory.mood === 'happy') reply = 'Отлично! Ты делаешь меня счастливым!';
+        else if (botMemory.mood === 'sad') reply = 'Немного грустно... но ты помогаешь!';
+        else reply = 'Нормально! У меня 20 IQ, но настроение класс! А у тебя?';
+        botMemory.lastTopic = 'mood';
+        saveMemory();
+        return reply;
+      }
+
+      // Определение темы
+      const topic = detectTopic(clean);
+      if (topic) {
+        botMemory.lastTopic = topic;
+        botMemory.mood = topic === 'mood' ? 'sad' : topic === 'happy' ? 'happy' : 'neutral';
+        saveMemory();
+
+        const category = knowledge[topic];
+        let reply = category.replies[Math.floor(Math.random() * category.replies.length)];
+
+        // Добавляем follow-up с 40% вероятностью, если есть
+        if (category.followUps && Math.random() > 0.6) {
+          const follow = category.followUps[Math.floor(Math.random() * category.followUps.length)];
+          reply += ' ' + follow;
+        }
+
+        return reply;
+      }
+
+      // Если последняя тема — и нет новой, продолжаем её
+      if (botMemory.lastTopic && knowledge[botMemory.lastTopic] && Math.random() > 0.7) {
+        const cat = knowledge[botMemory.lastTopic];
+        if (cat.followUps) {
+          return cat.followUps[Math.floor(Math.random() * cat.followUps.length)];
+        }
+      }
+
+      // Обучение: если сообщение короткое и необычное — запоминаем как "правильный ответ"
+      if (clean.split(' ').length <= 3 && !/^[0-9]+$/.test(clean) && botMemory.messageCount > 2) {
+        if (Math.random() > 0.9) {
+          botMemory.learnedResponse = userMsg;
+          saveMemory();
+          return `Записал: "${userMsg}" — это очень умно!`;
+        }
+      }
+
+      // Фолбэк
+      return fallbacks[Math.floor(Math.random() * fallbacks.length)];
+    }
+
+    // Отправка
+    function sendMessage() {
+      const msg = userInput.value.trim();
+      if (!msg) return;
+
+      addMessage(msg, true);
+      botMemory.lastUserMessage = msg;
+
+      userInput.value = '';
+
+      setTimeout(() => {
+        const reply = generateResponse(msg);
+        addMessage(reply, false);
+        saveMemory(); // Сохраняем после каждого ответа
+      }, 900);
+    }
+
+    // Инициализация
+    initChat();
+
+    // События
+    sendBtn.addEventListener('click', sendMessage);
+    userInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') sendMessage();
+    });
+  </script>
+</body>
+</html>
